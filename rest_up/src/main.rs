@@ -1,3 +1,4 @@
+//Angel Lores - CS 410P - Question Server
 use serde::{Serialize, Deserialize};
 use std::{net::SocketAddr, collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
@@ -12,15 +13,22 @@ use axum::{
 
 //QUESTION Struct & Impl
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Question {
-    pub id: String,
-    pub title: String,
-    pub content: String,
-    pub tags: Option<Vec<String>>
+struct Question {
+    id: String,
+    title: String,
+    content: String,
+    tags: Option<Vec<String>>
 }
+/* Future struct for Answer
+struct Answer {
+    id: String,
+    content: String,
+    q_id: String
+} 
+*/
 //Implementing Question's new instance w/ args id, title, content, tags
 impl Question {
-    pub fn new(
+    fn new(
         id: &str,
         title: &str,
         content: &str,
@@ -43,42 +51,74 @@ impl Question {
     }
 }
 
-//STORE
+//STORE Struct & Impl
 #[derive(Clone)]
 struct Store {
-    questions: Arc<RwLock<HashMap<String, Question>>>,
+    //questions: Vec<Question>, //swapped for HashMap which is better for our purposes
+    questions: HashMap<String, Question>,
+    //answers: HashMap<String, Answer>
 }
 impl Store {
     fn new() -> Self {
         Store {
-            questions: Arc::new(RwLock::new(Self::init()))
+            questions: HashMap::new(),
         }
     }
-
-    fn init() -> HashMap<String, Question> {
-        let file = include_str!("../questions.json");
-        serde_json::from_str(file).expect("can't read questions.json")
+    //Prefill for testing
+    fn prefill(&mut self) {
+        let q = vec![
+            Question::new(
+                "8050",
+                "Program",
+                "How do we implement this?",
+                &["cs", "rust", "web_dev"]
+            ),
+            Question::new(
+                "1010",
+                "Graduation",
+                "When is the grad fair?",
+                &["cs", "e"]
+            ),
+        ];
+        q.into_iter().for_each(|q| self.post(q));
     }
+    //GET all (Read)
+    fn get(&self) -> &HashMap<String, Question> {
+        &self.questions
+    }
+    //POST (Create)
+    fn post(&mut self, q: Question) {
+        self.questions.insert(q.id.clone(), q);
+    }
+    //PUT (Update) 
+    //DELETE
 }
-
-
+//MAIN
 #[tokio::main]
 async fn main() {
+    let mut s = Store::new();
+    s.prefill();
+    let s = Arc::new(RwLock::new(s));
+    //Mostly taken from Bart's Knock Knock
     let app = Router::new()
-        .route("/", get(get_questions));
+        .route("/", post(post_op))
+        .route("/", get(get_op))
+        //.route("/", put(put_op))
+        //.route("/", delete(delete_op))
+        .with_state(s); //necessary or error with axum::serve
     let ip = SocketAddr::new([127, 0, 0, 1].into(), 3000);
     let listener = tokio::net::TcpListener::bind(ip).await.unwrap();
     println!("http://{}/", ip);
     axum::serve(listener, app).await.unwrap();
 } 
-
-async fn get_questions() -> impl IntoResponse {
-    let tags = &["tag1", "tag2", "tag3"];
-    let q = Question::new(
-        "782",
-        "Example Question",
-        "Example Content",
-        tags
-    );
+//Get all questions
+async fn get_op(State(s): State<Arc<RwLock<Store>>>) -> impl IntoResponse {
+    let q: Vec<Question> = s.read().await.get().values().cloned().collect();
     Json(q)
 }
+//Post a question (probably need to make sure id does not exist already?)
+async fn post_op(State(s): State<Arc<RwLock<Store>>>, Json(q): Json<Question>) {
+    s.write().await.post(q);
+}
+//Put (Update) a question
+//Delete a question
