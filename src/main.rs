@@ -3,9 +3,9 @@ use serde::{Serialize, Deserialize};
 use std::{net::SocketAddr, collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     //http::StatusCode, //unused but will be
-    response::{IntoResponse, Response, Redirect},
+    response::IntoResponse,
     routing::{get, post, put, delete},
     Json, 
     Router
