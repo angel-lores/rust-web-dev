@@ -1,15 +1,15 @@
 //Angel Lores - CS 410P - Question Server
-use serde::{Serialize, Deserialize};
-use std::{net::SocketAddr, collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
 use axum::{
     extract::{Path, State},
     //http::StatusCode, //unused but will be
     response::IntoResponse,
-    routing::{get, post, put, delete},
-    Json, 
-    Router
+    routing::{delete, get, post, put},
+    Json,
+    Router,
 };
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 
 //QUESTION Struct & Impl
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -17,23 +17,18 @@ struct Question {
     id: String,
     title: String,
     content: String,
-    tags: Option<Vec<String>>
+    tags: Option<Vec<String>>,
 }
 /* Future struct for Answer
 struct Answer {
     id: String,
     content: String,
     q_id: String
-} 
+}
 */
 //Implementing Question's new instance w/ args id, title, content, tags
 impl Question {
-    fn new(
-        id: &str,
-        title: &str,
-        content: &str,
-        tags: &[&str],
-    ) -> Self {
+    fn new(id: &str, title: &str, content: &str, tags: &[&str]) -> Self {
         let id = id.into();
         let title = title.into();
         let content = content.into();
@@ -46,7 +41,7 @@ impl Question {
             id,
             title,
             content,
-            tags
+            tags,
         }
     }
 }
@@ -71,14 +66,9 @@ impl Store {
                 "8050",
                 "Program",
                 "How do we implement this?",
-                &["cs", "rust", "web_dev"]
+                &["cs", "rust", "web_dev"],
             ),
-            Question::new(
-                "1010",
-                "Graduation",
-                "When is the grad fair?",
-                &["cs", "e"]
-            ),
+            Question::new("1010", "Graduation", "When is the grad fair?", &["cs", "e"]),
         ];
         q.into_iter().for_each(|q| self.post(q));
     }
@@ -94,7 +84,7 @@ impl Store {
     fn post(&mut self, q: Question) {
         self.questions.insert(q.id.clone(), q);
     }
-    //PUT (Update) 
+    //PUT (Update)
     fn put(&mut self, id: &str, q: Question) {
         if let Some(qu) = self.questions.get_mut(id) {
             //qu.id = q.id.clone();
@@ -126,7 +116,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(ip).await.unwrap();
     println!("http://{}/", ip);
     axum::serve(listener, app).await.unwrap();
-} 
+}
 //Get all questions (needs pagination later)
 async fn get_all_op(State(s): State<Arc<RwLock<Store>>>) -> impl IntoResponse {
     let q: Vec<Question> = s.read().await.get_all().values().cloned().collect();
@@ -144,7 +134,11 @@ async fn post_op(State(s): State<Arc<RwLock<Store>>>, Json(q): Json<Question>) {
 //Put (Update) a question
 /* Currently a question which is updated cannot be deleted/updated unless using its previous id */
 /* I guess a cop out fix would be to remove the ability to update the id... done. */
-async fn put_op(State(s): State<Arc<RwLock<Store>>>, Path(id): Path<String>, Json(q): Json<Question>) {
+async fn put_op(
+    State(s): State<Arc<RwLock<Store>>>,
+    Path(id): Path<String>,
+    Json(q): Json<Question>,
+) {
     let mut s = s.write().await;
     s.put(&id, q);
 }
