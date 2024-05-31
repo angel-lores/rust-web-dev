@@ -19,6 +19,21 @@ struct Question {
     tags: Option<Vec<String>>,
 }
 
+//ANSWER Struct
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Answer {
+    id: Option<i32>,
+    content: String,
+    q_id: i32
+}
+
+//QUESTION WITH ANSWERS Struct
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct QuestionWithAnswers {
+    question: Question,
+    answers: Vec<Answer>,
+}
+
 //MAIN
 #[tokio::main]
 async fn main() {
@@ -32,17 +47,18 @@ async fn main() {
         .expect("can't connect to db");
 
     let app = Router::new()
-        .route("/", post(post_op).get(get_all_op))
-        .route("/:id", get(get_op).put(put_op).delete(delete_op))
+        .route("/q/", post(post_q_op).get(get_all_op))
+        .route("/a/", post(post_a_op))
+        .route("/qa/:id", get(get_op).put(put_op).delete(delete_op))
         .with_state(db_pool);
     let ip = SocketAddr::new([127, 0, 0, 1].into(), 3000);
     let listener = tokio::net::TcpListener::bind(ip).await.unwrap();
-    println!("http://{}/", ip);
+    println!("http://{}/q/", ip);
     axum::serve(listener, app).await.unwrap();
 }
 
 //HANDLERS using sqlx for CRUD operations to and from the database
-async fn post_op(State(db_pool): State<PgPool>, Json(new_question): Json<Question>) -> Result<Json<Question>, StatusCode> {
+async fn post_q_op(State(db_pool): State<PgPool>, Json(new_question): Json<Question>) -> Result<Json<Question>, StatusCode> {
     let question = sqlx::query!(
         r#"INSERT INTO question (title, content, tags) VALUES ($1, $2, $3) RETURNING id"#,
         new_question.title,
@@ -60,6 +76,23 @@ async fn post_op(State(db_pool): State<PgPool>, Json(new_question): Json<Questio
     new_question.id = Some(question.id);
     Ok(Json(new_question))
 }
+async fn post_a_op(State(db_pool): State<PgPool>, Json(new_answer): Json<Answer>) -> Result<Json<Answer>, StatusCode> {
+    let answer = sqlx::query!(
+        r#"INSERT INTO answer (q_id, content) VALUES ($1, $2) RETURNING id"#,
+        new_answer.q_id,
+        new_answer.content,
+    )
+    .fetch_one(&db_pool)
+    .await
+    .map_err(|e| {
+        println!("Database Error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let mut new_answer = new_answer.clone();
+    new_answer.id = Some(answer.id);
+    Ok(Json(new_answer))
+}
 async fn get_all_op(State(db_pool): State<PgPool>) -> Result<Json<Vec<Question>>, StatusCode> {
     let question = sqlx::query_as!(Question, "SELECT * FROM question")
         .fetch_all(&db_pool)
@@ -70,7 +103,7 @@ async fn get_all_op(State(db_pool): State<PgPool>) -> Result<Json<Vec<Question>>
         })?;
     Ok(Json(question))
 }
-async fn get_op(Path(id): Path<i32>, State(db_pool): State<PgPool>) -> Result<Json<Question>, StatusCode> {
+async fn get_op(Path(id): Path<i32>, State(db_pool): State<PgPool>) -> Result<Json<QuestionWithAnswers>, StatusCode> {
     let question = sqlx::query_as!(Question, "SELECT * FROM question WHERE id = $1", id)
         .fetch_optional(&db_pool)
         .await
@@ -80,7 +113,22 @@ async fn get_op(Path(id): Path<i32>, State(db_pool): State<PgPool>) -> Result<Js
         })?;
 
     match question {
-        Some(question) => Ok(Json(question)), // Use the unwrapped Question
+        Some(question) => {
+            let answers = sqlx::query_as!(Answer, "SELECT * FROM answer WHERE q_id = $1", id)
+                .fetch_all(&db_pool)
+                .await
+                .map_err(|e| {
+                    println!("Database Error: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+
+            let question_with_answers = QuestionWithAnswers {
+                question,
+                answers,
+            };
+
+            Ok(Json(question_with_answers))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -104,13 +152,31 @@ async fn put_op(Path(id): Path<i32>, State(db_pool): State<PgPool>, Json(update_
     }
 }
 async fn delete_op(Path(id): Path<i32>, State(db_pool): State<PgPool>) -> Result<StatusCode, StatusCode> {
-    sqlx::query!("DELETE FROM question WHERE id = $1", id)
-        .execute(&db_pool)
+    let mut transaction = db_pool.begin().await.map_err(|e| {
+        println!("Failed to start transaction: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    //Delete answers associated to the question
+    sqlx::query!("DELETE FROM answer WHERE q_id = $1", id)
+        .execute(&mut *transaction)
         .await
         .map_err(|e| {
             println!("Database Error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    //Delete question
+    sqlx::query!("DELETE FROM question WHERE id = $1", id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|e| {
+            println!("Database Error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    //Commit transaction if there are no errors or rollback
+    transaction.commit().await.map_err(|e| {
+        println!("Failed to commit transaction: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -30,31 +30,41 @@ CREATE TABLE question (
 );
 ```
 ```SQL
+CREATE TABLE answer (
+    id SERIAL PRIMARY KEY,
+    content VARCHAR(255) NOT NULL,
+    q_id INTEGER REFERENCES question(id) NOT NULL
+);
+```
+```SQL
 quit
 ```
 
-## Run & Test
+## Run & Test (http://127.0.0.1:3000/q/)
 ```console
 cargo run
 ```
-Use URL http://127.0.0.1/3000/ to view the questions while you run the following commands on a terminal separate from where you used cargo run:
-POST
+POST a question
 ```
-curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d '{"title": "US President", "content": "Who was the first president of the USA?", "tags": ["USA", "trivia"]}'
+curl -X POST http://localhost:3000/q/ -H "Content-Type: application/json" -d '{"title": "US President", "content": "Who was the first president of the USA?", "tags": ["USA", "trivia"]}'
 ```
-GET All
+POST an answer to a question (q_id must match an existing question id)
 ```
-curl http://localhost:3000/
+curl -X POST http://localhost:3000/a/ -H "Content-Type: application/json" -d '{"content": "George Washington", "q_id": 1}'
 ```
-GET By ID
+GET all questions
 ```
-curl http://localhost:3000/1
+curl http://localhost:3000/q/
 ```
-PUT By ID
+GET a question and all associated answers by question ID
 ```
-curl -X PUT http://localhost:3000/1 -H "Content-Type: application/json" -d '{"title": "USA", "content": "Who was the third president?", "tags": ["trivia", "usa"]}'
+curl http://localhost:3000/qa/1
 ```
-DELETE By ID
+PUT a question by ID
 ```
-curl -X DELETE http://localhost:3000/1
+curl -X PUT http://localhost:3000/qa/1 -H "Content-Type: application/json" -d '{"title": "USA", "content": "Who was the third president?", "tags": ["trivia", "usa"]}'
+```
+DELETE a question and all associated answers by ID
+```
+curl -X DELETE http://localhost:3000/qa/1
 ```
