@@ -1,4 +1,4 @@
-//Angel Lores - CS 410P - Question Server
+//Angel Lores - CS 410P - Question Server Backend
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -9,6 +9,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use sqlx::{postgres::PgPoolOptions, PgPool};
+use http::HeaderValue;
+use tower_http::cors::{Any, CorsLayer};
 
 //QUESTION Struct
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,11 +47,15 @@ async fn main() {
         .connect(&db_url)
         .await
         .expect("can't connect to db");
-
+    let cors = CorsLayer::new()
+        .allow_origin(HeaderValue::from_static("http://127.0.0.1:9000"))
+        .allow_methods(Any)
+        .allow_headers(Any);
     let app = Router::new()
         .route("/q/", post(post_q_op).get(get_all_op))
         .route("/a/", post(post_a_op))
         .route("/qa/:id", get(get_op).put(put_op).delete(delete_op))
+        .layer(cors)
         .with_state(db_pool);
     let ip = SocketAddr::new([127, 0, 0, 1].into(), 3000);
     let listener = tokio::net::TcpListener::bind(ip).await.unwrap();
@@ -147,7 +153,7 @@ async fn put_op(Path(id): Path<i32>, State(db_pool): State<PgPool>, Json(update_
     })?;
 
     match question {
-        Some(question) => Ok(Json(question)), // Use the unwrapped Question
+        Some(question) => Ok(Json(question)), 
         None => Err(StatusCode::NOT_FOUND),
     }
 }
