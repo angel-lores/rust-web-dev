@@ -48,7 +48,7 @@ async fn main() {
         .await
         .expect("can't connect to db");
     let cors = CorsLayer::new()
-        .allow_origin(HeaderValue::from_static("http://127.0.0.1:9000"))
+        .allow_origin(HeaderValue::from_static("http://127.0.0.1:5000"))
         .allow_methods(Any)
         .allow_headers(Any);
     let app = Router::new()
