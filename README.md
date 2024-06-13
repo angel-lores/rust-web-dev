@@ -6,6 +6,7 @@ This is a homework repository for CS-410P Rust Web Development taken at PSU in S
 ## Requirements
 - Rust
 - PostgreSQL
+- Trunk
 
 ## Database Setup
 After installing PostgreSQL run the following commands to create the Database & Table:
@@ -40,8 +41,9 @@ CREATE TABLE answer (
 quit
 ```
 
-## Run & Test (http://127.0.0.1:3000/q/)
+## Run & Test Backend (http://127.0.0.1:3000/q/)
 ```console
+cd backend
 cargo run
 ```
 POST a question
@@ -67,4 +69,14 @@ curl -X PUT http://localhost:3000/qa/1 -H "Content-Type: application/json" -d '{
 DELETE a question and all associated answers by ID
 ```
 curl -X DELETE http://localhost:3000/qa/1
+```
+## Run & Test Frontend
+Leaving the backend running on one terminal, head to a new terminal and into the frontend folder
+```console
+cd frontend
+cargo install trunk
+cargo install wasm-pack
+cargo install wasm-bindgen-cli
+rustup target add wasm32-unknown-unknown
+trunk serve --open
 ```
